@@ -1,0 +1,103 @@
+{
+  "vendors": [
+    {
+      "name": "QuickFix Plumbing",
+      "category": "plumbing",
+      "phone": "555-0101",
+      "email": "dispatch@quickfixplumbing.com",
+      "available_24_7": true,
+      "sla_hours": {
+        "critical": 2,
+        "high": 8,
+        "medium": 24,
+        "low": 72
+      },
+      "rating": 4.8
+    },
+    {
+      "name": "CoolBreeze HVAC",
+      "category": "hvac",
+      "phone": "555-0202",
+      "email": "service@coolbreezehvac.com",
+      "available_24_7": false,
+      "sla_hours": {
+        "critical": 4,
+        "high": 8,
+        "medium": 24,
+        "low": 72
+      },
+      "rating": 4.6
+    },
+    {
+      "name": "BrightSpark Electric",
+      "category": "electrical",
+      "phone": "555-0303",
+      "email": "emergency@brightspark.com",
+      "available_24_7": true,
+      "sla_hours": {
+        "critical": 1,
+        "high": 8,
+        "medium": 24,
+        "low": 72
+      },
+      "rating": 4.9
+    },
+    {
+      "name": "ShieldPest Solutions",
+      "category": "pest_control",
+      "phone": "555-0404",
+      "email": "bookings@shieldpest.com",
+      "available_24_7": false,
+      "sla_hours": {
+        "critical": 4,
+        "high": 12,
+        "medium": 48,
+        "low": 72
+      },
+      "rating": 4.5
+    },
+    {
+      "name": "HomeServe Appliance Repair",
+      "category": "appliance",
+      "phone": "555-0505",
+      "email": "repairs@homeserveappliance.com",
+      "available_24_7": true,
+      "sla_hours": {
+        "critical": 1,
+        "high": 8,
+        "medium": 24,
+        "low": 72
+      },
+      "rating": 4.7
+    },
+    {
+      "name": "AllFix Property Maintenance",
+      "category": "general_maintenance",
+      "phone": "555-0606",
+      "email": "work@allfixmaint.com",
+      "available_24_7": false,
+      "sla_hours": {
+        "critical": 4,
+        "high": 8,
+        "medium": 48,
+        "low": 72
+      },
+      "rating": 4.4
+    },
+    {
+      "name": "CleanAir Remediation",
+      "category": "general_maintenance",
+      "phone": "555-0707",
+      "email": "urgent@cleanairremediation.com",
+      "available_24_7": true,
+      "sla_hours": {
+        "critical": 2,
+        "high": 4,
+        "medium": 24,
+        "low": 48
+      },
+      "specialization": "mold_and_air_quality",
+      "rating": 4.8
+    }
+  ]
+}

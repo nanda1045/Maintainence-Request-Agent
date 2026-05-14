@@ -1,0 +1,162 @@
+[
+  {
+    "test_id": 1,
+    "unit": "4A",
+    "resident_name": "John Smith",
+    "complaint": "Water is pouring from my bathroom ceiling. It's getting worse by the minute.",
+    "expected_category": "plumbing",
+    "expected_urgency": "critical"
+  },
+  {
+    "test_id": 2,
+    "unit": "9B",
+    "resident_name": "Maria Garcia",
+    "complaint": "The kitchen faucet has a slow drip. Not urgent but it's annoying.",
+    "expected_category": "plumbing",
+    "expected_urgency": "low"
+  },
+  {
+    "test_id": 3,
+    "unit": "6D",
+    "resident_name": "James Wilson",
+    "complaint": "No heat in my apartment. It's 20 degrees outside and my kids are freezing.",
+    "expected_category": "hvac",
+    "expected_urgency": "critical"
+  },
+  {
+    "test_id": 4,
+    "unit": "11A",
+    "resident_name": "Sarah Johnson",
+    "complaint": "The AC makes a clicking sound sometimes. Still works fine though.",
+    "expected_category": "hvac",
+    "expected_urgency": "low"
+  },
+  {
+    "test_id": 5,
+    "unit": "2C",
+    "resident_name": "David Lee",
+    "complaint": "I see sparks coming from an outlet when I plug things in. Scared it might catch fire.",
+    "expected_category": "electrical",
+    "expected_urgency": "critical"
+  },
+  {
+    "test_id": 6,
+    "unit": "8B",
+    "resident_name": "Emily Chen",
+    "complaint": "One light switch in the hallway doesn't work. We just use the other switch.",
+    "expected_category": "electrical",
+    "expected_urgency": "low"
+  },
+  {
+    "test_id": 7,
+    "unit": "5C",
+    "resident_name": "Michael Brown",
+    "complaint": "Found mouse droppings in the kitchen pantry. Saw a mouse run across the floor last night.",
+    "expected_category": "pest_control",
+    "expected_urgency": "medium"
+  },
+  {
+    "test_id": 8,
+    "unit": "3A",
+    "resident_name": "Lisa Anderson",
+    "complaint": "The oven won't heat up at all. Can't cook any meals for my family.",
+    "expected_category": "appliance",
+    "expected_urgency": "medium"
+  },
+  {
+    "test_id": 9,
+    "unit": "7B",
+    "resident_name": "Robert Taylor",
+    "complaint": "The bathroom door handle fell off. Door won't close properly now.",
+    "expected_category": "general_maintenance",
+    "expected_urgency": "medium"
+  },
+  {
+    "test_id": 10,
+    "unit": "12B",
+    "resident_name": "Jennifer Martinez",
+    "complaint": "Strong gas smell in the kitchen. I've opened windows and left the apartment.",
+    "expected_category": "appliance",
+    "expected_urgency": "critical"
+  },
+  {
+    "test_id": 11,
+    "unit": "1C",
+    "resident_name": "William Davis",
+    "complaint": "Toilet is overflowing and won't stop. Water is spreading to the hallway.",
+    "expected_category": "plumbing",
+    "expected_urgency": "critical"
+  },
+  {
+    "test_id": 12,
+    "unit": "10A",
+    "resident_name": "Amanda White",
+    "complaint": "The paint on the bedroom ceiling is peeling. Small flakes keep falling.",
+    "expected_category": "general_maintenance",
+    "expected_urgency": "low"
+  },
+  {
+    "test_id": 13,
+    "unit": "6B",
+    "resident_name": "Christopher Harris",
+    "complaint": "AC is blowing hot air. Temperature inside is over 95 degrees. I have elderly parents staying with me.",
+    "expected_category": "hvac",
+    "expected_urgency": "high"
+  },
+  {
+    "test_id": 14,
+    "unit": "4C",
+    "resident_name": "Jessica Clark",
+    "complaint": "I found what looks like black mold growing behind the bathroom tiles. My daughter has been coughing a lot.",
+    "expected_category": "general_maintenance",
+    "expected_urgency": "critical"
+  },
+  {
+    "test_id": 15,
+    "unit": "8D",
+    "resident_name": "Daniel Lewis",
+    "complaint": "The washing machine is leaking a small amount of water during the rinse cycle.",
+    "expected_category": "appliance",
+    "expected_urgency": "medium"
+  },
+  {
+    "test_id": 16,
+    "unit": "2B",
+    "resident_name": "Stephanie Robinson",
+    "complaint": "Multiple ants coming in through the window in the kitchen. Getting worse each day.",
+    "expected_category": "pest_control",
+    "expected_urgency": "medium"
+  },
+  {
+    "test_id": 17,
+    "unit": "9C",
+    "resident_name": "Kevin Walker",
+    "complaint": "The front door deadbolt is jammed. I can't lock my door when I leave for work.",
+    "expected_category": "general_maintenance",
+    "expected_urgency": "high"
+  },
+  {
+    "test_id": 18,
+    "unit": "5A",
+    "resident_name": "Rachel Hall",
+    "complaint": "Flickering lights in multiple rooms. Happened suddenly tonight.",
+    "expected_category": "electrical",
+    "expected_urgency": "high"
+  },
+  {
+    "test_id": 19,
+    "unit": "11B",
+    "resident_name": "Thomas Young",
+    "complaint": "The refrigerator is making a loud buzzing noise but still seems to be working.",
+    "expected_category": "appliance",
+    "expected_urgency": "low"
+  },
+  {
+    "test_id": 20,
+    "unit": "7C",
+    "resident_name": "Nicole King",
+    "complaint": "Water heater is not producing any hot water. We've had cold showers for two days.",
+    "expected_category": "plumbing",
+    "expected_urgency": "high"
+  }
+]
