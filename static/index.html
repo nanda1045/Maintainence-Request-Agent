@@ -370,6 +370,11 @@
              🚨 Emergency detected — fast-tracked as critical
            </div>`
         : '';
+      const reviewNote = d.needs_human_review
+        ? `<div style="padding:10px 14px;background:var(--medium-light);border-radius:8px;color:var(--medium);font-size:13px;font-weight:600;margin-bottom:12px;">
+             Manager review required${d.escalation_reason ? `: ${escapeHtml(d.escalation_reason)}` : ''}
+           </div>`
+        : '';
 
       resultArea.innerHTML = `
         <div class="result-card">
@@ -379,6 +384,7 @@
           </div>
           <div class="result-body">
             ${emergencyNote}
+            ${reviewNote}
             <div class="result-meta">
               <div class="meta-item">
                 <div class="meta-label">Category</div>
@@ -395,6 +401,14 @@
               <div class="meta-item">
                 <div class="meta-label">ETA</div>
                 <div class="meta-value">Within ${d.vendor.sla_hours}h</div>
+              </div>
+              <div class="meta-item">
+                <div class="meta-label">Confidence</div>
+                <div class="meta-value">${formatConfidence(d.confidence_score)}</div>
+              </div>
+              <div class="meta-item">
+                <div class="meta-label">Review</div>
+                <div class="meta-value">${d.needs_human_review ? 'Required' : 'Automated'}</div>
               </div>
             </div>
             <div class="divider"></div>
@@ -417,6 +431,12 @@
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
+    }
+
+    function formatConfidence(score) {
+      const numeric = Number(score);
+      if (!Number.isFinite(numeric)) return 'N/A';
+      return `${Math.round(numeric * 100)}%`;
     }
   </script>
 </body>

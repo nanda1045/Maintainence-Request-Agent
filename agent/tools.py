@@ -97,7 +97,8 @@ def classify_request_tool(
     similar_tickets: list[dict],
 ) -> dict:
     """
-    Use Claude to classify a maintenance complaint into category + urgency.
+    Use Claude to classify a maintenance complaint into category + urgency,
+    with confidence scoring and human escalation logic.
 
     Args:
         complaint: The resident's complaint text.
@@ -109,6 +110,9 @@ def classify_request_tool(
         dict with:
           - category: one of (plumbing, hvac, electrical, pest_control, appliance, general_maintenance)
           - urgency: one of (critical, high, medium, low)
+          - confidence_score: float 0.0-1.0
+          - requires_human_review: bool
+          - escalation_reason: str (reason for escalation, if any)
           - reasoning: brief explanation of the classification
     """
     context = _format_similar_tickets_context(similar_tickets)
@@ -123,7 +127,7 @@ def classify_request_tool(
     client = _get_anthropic_client()
     response = client.messages.create(
         model=MODEL,
-        max_tokens=300,
+        max_tokens=500,
         temperature=0.0,  # deterministic classification
         messages=[{"role": "user", "content": prompt}],
     )
@@ -145,10 +149,26 @@ def classify_request_tool(
     }
     valid_urgencies = {"critical", "high", "medium", "low"}
 
-    if result["category"] not in valid_categories:
+    if result.get("category") not in valid_categories:
         result["category"] = "general_maintenance"
-    if result["urgency"] not in valid_urgencies:
+    if result.get("urgency") not in valid_urgencies:
         result["urgency"] = "medium"
+
+    # Validate and clamp confidence score
+    confidence = result.get("confidence_score", 0.5)
+    if not isinstance(confidence, (int, float)):
+        confidence = 0.5
+    result["confidence_score"] = max(0.0, min(1.0, float(confidence)))
+
+    # Enforce auto-escalation if confidence is below threshold
+    if result["confidence_score"] < 0.75:
+        result["requires_human_review"] = True
+        if not result.get("escalation_reason"):
+            result["escalation_reason"] = f"Low confidence score ({result['confidence_score']:.2f})"
+
+    # Ensure boolean type
+    result["requires_human_review"] = bool(result.get("requires_human_review", False))
+    result["escalation_reason"] = result.get("escalation_reason", "")
 
     return result
 
@@ -229,6 +249,8 @@ def draft_response_tool(
     vendor_phone: str,
     sla_hours: int,
     similar_tickets: list[dict],
+    requires_human_review: bool = False,
+    escalation_reason: str = "",
 ) -> dict:
     """
     Use Claude to draft an empathetic response message to the resident.
@@ -243,6 +265,8 @@ def draft_response_tool(
         vendor_phone: Vendor phone number.
         sla_hours: SLA deadline in hours.
         similar_tickets: Similar past tickets for resolution context.
+        requires_human_review: Whether escalated for human review.
+        escalation_reason: Reason for escalation.
 
     Returns:
         dict with:
@@ -259,6 +283,8 @@ def draft_response_tool(
         vendor_name=vendor_name,
         vendor_phone=vendor_phone,
         sla_hours=sla_hours,
+        requires_human_review="Yes" if requires_human_review else "No",
+        escalation_reason=escalation_reason or "N/A",
         similar_tickets_context=context,
     )
 
@@ -290,6 +316,9 @@ def log_ticket_tool(
     sla_hours: int,
     similar_ticket_ids: list[str],
     resident_message: str,
+    confidence_score: float = 0.0,
+    requires_human_review: bool = False,
+    escalation_reason: str = "",
 ) -> dict:
     """
     Log the complete triage result to the SQLite database.
@@ -306,6 +335,9 @@ def log_ticket_tool(
         sla_hours: SLA deadline in hours.
         similar_ticket_ids: List of similar ticket IDs from RAG.
         resident_message: The drafted empathetic response.
+        confidence_score: AI confidence in classification (0.0-1.0).
+        requires_human_review: Whether escalated for human review.
+        escalation_reason: Reason for escalation.
 
     Returns:
         dict with:
@@ -328,6 +360,9 @@ def log_ticket_tool(
         sla_hours=sla_hours,
         similar_tickets=similar_ticket_ids,
         resident_message=resident_message,
+        confidence_score=confidence_score,
+        requires_human_review=requires_human_review,
+        escalation_reason=escalation_reason,
         status="open",
     )
 

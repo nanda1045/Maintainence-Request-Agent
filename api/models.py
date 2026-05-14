@@ -80,6 +80,12 @@ class TicketResponse(BaseModel):
     complaint: str = Field(..., description="Original complaint text.")
     category: str = Field(..., description="Classified maintenance category.")
     urgency: str = Field(..., description="Classified urgency level.")
+    confidence_score: float = Field(
+        0.0,
+        ge=0.0,
+        le=1.0,
+        description="AI confidence in the classification.",
+    )
     reasoning: str = Field("", description="Explanation for the classification.")
     vendor: VendorInfo = Field(..., description="Assigned vendor details.")
     similar_tickets: list[str] = Field(
@@ -96,6 +102,14 @@ class TicketResponse(BaseModel):
         False,
         description="Whether the ticket was flagged for manual review.",
     )
+    escalation_reason: str = Field(
+        "",
+        description="Reason the ticket requires human review, if applicable.",
+    )
+    recommended_action: str = Field(
+        "",
+        description="Recommended next operational action.",
+    )
 
 
 class TicketListItem(BaseModel):
@@ -107,6 +121,9 @@ class TicketListItem(BaseModel):
     complaint: str
     category: str
     urgency: str
+    confidence_score: float = 0.0
+    needs_human_review: bool = False
+    escalation_reason: str = ""
     vendor_name: Optional[str] = None
     sla_hours: Optional[int] = None
     status: str
@@ -151,6 +168,9 @@ class ResponseItem(BaseModel):
     complaint: str = Field(..., description="Original complaint text.")
     category: str = Field(..., description="Classified category.")
     urgency: str = Field(..., description="Classified urgency level.")
+    confidence_score: float = Field(0.0, description="AI confidence in the classification.")
+    needs_human_review: bool = Field(False, description="Whether the ticket was escalated.")
+    escalation_reason: str = Field("", description="Reason for escalation, if applicable.")
     resident_message: str = Field(..., description="The empathetic response drafted for the resident.")
     vendor_name: Optional[str] = Field(None, description="Assigned vendor.")
     sla_hours: Optional[int] = Field(None, description="SLA deadline in hours.")
@@ -163,4 +183,3 @@ class ResponseListResponse(BaseModel):
 
     responses: list[ResponseItem]
     total: int
-

@@ -45,6 +45,9 @@ def init_db(db_path: str = DB_PATH) -> None:
       - sla_hours         : SLA deadline in hours
       - similar_tickets   : JSON array of similar ticket IDs from RAG retrieval
       - resident_message  : the empathetic response drafted for the resident
+      - confidence_score  : AI confidence in classification (0.0 - 1.0)
+      - requires_human_review : whether the ticket was escalated for human review
+      - escalation_reason : reason for escalation (if applicable)
       - status            : ticket status (open, in_progress, resolved, closed)
       - created_at        : timestamp when ticket was created
       - updated_at        : timestamp when ticket was last updated
@@ -66,11 +69,18 @@ def init_db(db_path: str = DB_PATH) -> None:
                 sla_hours       INTEGER,
                 similar_tickets TEXT DEFAULT '[]',
                 resident_message TEXT,
+                confidence_score REAL DEFAULT 0.0,
+                requires_human_review INTEGER DEFAULT 0,
+                escalation_reason TEXT DEFAULT '',
                 status          TEXT DEFAULT 'open',
                 created_at      TEXT NOT NULL,
                 updated_at      TEXT NOT NULL
             )
         """)
+
+        _ensure_column(conn, "tickets", "confidence_score", "REAL DEFAULT 0.0")
+        _ensure_column(conn, "tickets", "requires_human_review", "INTEGER DEFAULT 0")
+        _ensure_column(conn, "tickets", "escalation_reason", "TEXT DEFAULT ''")
 
         # Index on category + urgency for quick lookups
         conn.execute("""
@@ -87,6 +97,21 @@ def init_db(db_path: str = DB_PATH) -> None:
         conn.commit()
     finally:
         conn.close()
+
+
+def _ensure_column(
+    conn: sqlite3.Connection,
+    table_name: str,
+    column_name: str,
+    column_definition: str,
+) -> None:
+    """Add a column to an existing SQLite table if it is missing."""
+    cursor = conn.execute(f"PRAGMA table_info({table_name})")
+    columns = {row["name"] for row in cursor.fetchall()}
+    if column_name not in columns:
+        conn.execute(
+            f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}"
+        )
 
 
 def generate_ticket_id() -> str:
@@ -117,6 +142,9 @@ def insert_ticket(
     sla_hours: Optional[int] = None,
     similar_tickets: Optional[list] = None,
     resident_message: Optional[str] = None,
+    confidence_score: float = 0.0,
+    requires_human_review: bool = False,
+    escalation_reason: str = "",
     status: str = "open",
     db_path: str = DB_PATH,
 ) -> dict:
@@ -135,13 +163,17 @@ def insert_ticket(
             INSERT INTO tickets (
                 ticket_id, unit, resident_name, complaint, category, urgency,
                 vendor_name, vendor_phone, vendor_email, sla_hours,
-                similar_tickets, resident_message, status, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                similar_tickets, resident_message,
+                confidence_score, requires_human_review, escalation_reason,
+                status, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 ticket_id, unit, resident_name, complaint, category, urgency,
                 vendor_name, vendor_phone, vendor_email, sla_hours,
-                similar_json, resident_message, status, now, now,
+                similar_json, resident_message,
+                confidence_score, 1 if requires_human_review else 0, escalation_reason,
+                status, now, now,
             ),
         )
         conn.commit()
@@ -265,6 +297,9 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
             d["similar_tickets"] = json.loads(d["similar_tickets"])
         except json.JSONDecodeError:
             d["similar_tickets"] = []
+    # Convert requires_human_review from int to bool
+    if "requires_human_review" in d:
+        d["requires_human_review"] = bool(d["requires_human_review"])
     return d
 
 

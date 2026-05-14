@@ -81,6 +81,7 @@ async def create_ticket(request: TicketRequest) -> TicketResponse:
         complaint=result["complaint"],
         category=result["category"],
         urgency=result["urgency"],
+        confidence_score=result.get("confidence_score", 0.0),
         reasoning=result.get("reasoning", ""),
         vendor=VendorInfo(
             name=result["vendor"]["name"],
@@ -93,6 +94,8 @@ async def create_ticket(request: TicketRequest) -> TicketResponse:
         emergency_override=result.get("emergency_override", False),
         status=result.get("status", "open"),
         needs_human_review=result.get("needs_human_review", False),
+        escalation_reason=result.get("escalation_reason", ""),
+        recommended_action=result.get("recommended_action", ""),
     )
 
 
@@ -144,6 +147,9 @@ async def list_tickets(
             complaint=t["complaint"],
             category=t["category"],
             urgency=t["urgency"],
+            confidence_score=t.get("confidence_score", 0.0),
+            needs_human_review=t.get("requires_human_review", False),
+            escalation_reason=t.get("escalation_reason", ""),
             vendor_name=t.get("vendor_name"),
             sla_hours=t.get("sla_hours"),
             status=t["status"],
@@ -231,6 +237,9 @@ async def list_responses(
             complaint=t["complaint"],
             category=t["category"],
             urgency=t["urgency"],
+            confidence_score=t.get("confidence_score", 0.0),
+            needs_human_review=t.get("requires_human_review", False),
+            escalation_reason=t.get("escalation_reason", ""),
             resident_message=t.get("resident_message", ""),
             vendor_name=t.get("vendor_name"),
             sla_hours=t.get("sla_hours"),
@@ -270,6 +279,9 @@ async def get_response(ticket_id: str) -> ResponseItem:
         complaint=ticket["complaint"],
         category=ticket["category"],
         urgency=ticket["urgency"],
+        confidence_score=ticket.get("confidence_score", 0.0),
+        needs_human_review=ticket.get("requires_human_review", False),
+        escalation_reason=ticket.get("escalation_reason", ""),
         resident_message=ticket["resident_message"],
         vendor_name=ticket.get("vendor_name"),
         sla_hours=ticket.get("sla_hours"),

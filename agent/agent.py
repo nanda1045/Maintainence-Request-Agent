@@ -88,7 +88,8 @@ TOOL_DEFINITIONS = [
     {
         "name": "classify_request",
         "description": (
-            "Classify the maintenance complaint into a category and urgency level. "
+            "Classify the maintenance complaint into a category, urgency level, "
+            "confidence score, and whether human review is needed. "
             "Uses the complaint text and similar past tickets to make an informed "
             "classification. Call this AFTER retrieve_similar_tickets."
         ),
@@ -147,8 +148,8 @@ TOOL_DEFINITIONS = [
         "name": "draft_response",
         "description": (
             "Draft an empathetic response message to send to the resident. "
-            "Includes acknowledgment, vendor info, and expected timeline. "
-            "Call this AFTER get_vendor."
+            "Includes acknowledgment, vendor info, expected timeline, and "
+            "mentions human review if escalated. Call this AFTER get_vendor."
         ),
         "input_schema": {
             "type": "object",
@@ -189,6 +190,14 @@ TOOL_DEFINITIONS = [
                     "type": "array",
                     "description": "Similar past tickets for resolution context.",
                     "items": {"type": "object"},
+                },
+                "requires_human_review": {
+                    "type": "boolean",
+                    "description": "Whether the ticket has been escalated for human review.",
+                },
+                "escalation_reason": {
+                    "type": "string",
+                    "description": "Reason for escalation, if applicable.",
                 },
             },
             "required": [
@@ -253,6 +262,18 @@ TOOL_DEFINITIONS = [
                     "type": "string",
                     "description": "The drafted empathetic response message.",
                 },
+                "confidence_score": {
+                    "type": "number",
+                    "description": "AI confidence in classification (0.0-1.0).",
+                },
+                "requires_human_review": {
+                    "type": "boolean",
+                    "description": "Whether the ticket was escalated for human review.",
+                },
+                "escalation_reason": {
+                    "type": "string",
+                    "description": "Reason for escalation, if applicable.",
+                },
             },
             "required": [
                 "unit", "resident_name", "complaint", "category", "urgency",
@@ -308,6 +329,8 @@ def _execute_tool(tool_name: str, tool_input: dict) -> str:
                 vendor_phone=tool_input["vendor_phone"],
                 sla_hours=tool_input["sla_hours"],
                 similar_tickets=tool_input.get("similar_tickets", []),
+                requires_human_review=tool_input.get("requires_human_review", False),
+                escalation_reason=tool_input.get("escalation_reason", ""),
             )
 
         elif tool_name == "log_ticket":
@@ -323,6 +346,9 @@ def _execute_tool(tool_name: str, tool_input: dict) -> str:
                 sla_hours=tool_input["sla_hours"],
                 similar_ticket_ids=tool_input.get("similar_ticket_ids", []),
                 resident_message=tool_input["resident_message"],
+                confidence_score=tool_input.get("confidence_score", 0.0),
+                requires_human_review=tool_input.get("requires_human_review", False),
+                escalation_reason=tool_input.get("escalation_reason", ""),
             )
 
         else:
@@ -383,6 +409,9 @@ def _handle_emergency(complaint: str, unit: str, resident_name: str) -> dict:
     category = _get_emergency_category(complaint)
     urgency = "critical"
     reasoning = "EMERGENCY OVERRIDE: complaint contains safety-critical keywords"
+    requires_human_review = True
+    confidence_score = 1.0
+    escalation_reason = "Safety risk detected; emergency maintenance request requires property manager review."
 
     # Step 3: Get vendor (prioritize 24/7 for emergencies)
     vendor = get_vendor_tool(category, urgency)
@@ -398,6 +427,8 @@ def _handle_emergency(complaint: str, unit: str, resident_name: str) -> dict:
         vendor_phone=vendor["vendor_phone"],
         sla_hours=vendor["sla_hours"],
         similar_tickets=similar_tickets,
+        requires_human_review=requires_human_review,
+        escalation_reason=escalation_reason,
     )
 
     # Step 5: Log the ticket
@@ -413,6 +444,9 @@ def _handle_emergency(complaint: str, unit: str, resident_name: str) -> dict:
         sla_hours=vendor["sla_hours"],
         similar_ticket_ids=similar_ids,
         resident_message=draft["message"],
+        confidence_score=confidence_score,
+        requires_human_review=requires_human_review,
+        escalation_reason=escalation_reason,
     )
 
     return {
@@ -433,7 +467,10 @@ def _handle_emergency(complaint: str, unit: str, resident_name: str) -> dict:
         "resident_message": draft["message"],
         "emergency_override": True,
         "status": "open",
-        "needs_human_review": False,
+        "confidence_score": confidence_score,
+        "needs_human_review": requires_human_review,
+        "escalation_reason": escalation_reason,
+        "recommended_action": "Contact emergency services if there is immediate danger, dispatch the emergency vendor, and have a property manager personally review the ticket.",
     }
 
 
@@ -477,6 +514,9 @@ def _handle_fallback(
                 "If this is an emergency, please call our emergency line immediately.\n\n"
                 "Best regards,\nProperty Management Team"
             ),
+            confidence_score=0.0,
+            requires_human_review=True,
+            escalation_reason=f"Agent fallback: {error_msg}",
         )
         ticket_id = log["ticket_id"]
     except Exception:
@@ -503,7 +543,10 @@ def _handle_fallback(
         ),
         "emergency_override": False,
         "status": "open",
+        "confidence_score": 0.0,
         "needs_human_review": True,
+        "escalation_reason": f"Agent fallback: {error_msg}",
+        "recommended_action": "Route this ticket to a property manager for manual triage.",
         "error": error_msg,
     }
 
@@ -594,6 +637,22 @@ def process_complaint(
                         tool_input = block.input
                         tool_id = block.id
 
+                        classification = tool_results.get("classify_request", {})
+                        if tool_name in {"draft_response", "log_ticket"} and classification:
+                            tool_input.setdefault(
+                                "requires_human_review",
+                                classification.get("requires_human_review", False),
+                            )
+                            tool_input.setdefault(
+                                "escalation_reason",
+                                classification.get("escalation_reason", ""),
+                            )
+                        if tool_name == "log_ticket" and classification:
+                            tool_input.setdefault(
+                                "confidence_score",
+                                classification.get("confidence_score", 0.0),
+                            )
+
                         # Execute the tool
                         result_str = _execute_tool(tool_name, tool_input)
                         result_data = json.loads(result_str)
@@ -661,6 +720,23 @@ def _extract_result(
     rag = tool_results.get("retrieve_similar_tickets", {})
 
     similar_ids = [t["ticket_id"] for t in rag.get("similar_tickets", [])]
+    confidence_score = _clamp_confidence(classification.get("confidence_score", 0.0))
+    urgency = classification.get("urgency", "medium")
+    needs_human_review = bool(classification.get("requires_human_review", False))
+
+    if confidence_score < 0.75:
+        needs_human_review = True
+    if urgency == "critical":
+        needs_human_review = True
+
+    escalation_reason = classification.get("escalation_reason", "")
+    if needs_human_review and not escalation_reason:
+        if urgency == "critical":
+            escalation_reason = "Safety risk detected; critical request requires property manager review."
+        elif confidence_score < 0.75:
+            escalation_reason = f"Low confidence score ({confidence_score:.2f})"
+        else:
+            escalation_reason = "Request meets human review criteria."
 
     return {
         "ticket_id": log.get("ticket_id", "UNKNOWN"),
@@ -668,7 +744,7 @@ def _extract_result(
         "resident_name": resident_name,
         "complaint": complaint,
         "category": classification.get("category", "general_maintenance"),
-        "urgency": classification.get("urgency", "medium"),
+        "urgency": urgency,
         "reasoning": classification.get("reasoning", ""),
         "vendor": {
             "name": vendor.get("vendor_name", "UNKNOWN"),
@@ -680,5 +756,41 @@ def _extract_result(
         "resident_message": draft.get("message", ""),
         "emergency_override": False,
         "status": log.get("status", "open"),
-        "needs_human_review": False,
+        "confidence_score": confidence_score,
+        "needs_human_review": needs_human_review,
+        "escalation_reason": escalation_reason,
+        "recommended_action": _build_recommended_action(
+            needs_human_review=needs_human_review,
+            urgency=urgency,
+            vendor_name=vendor.get("vendor_name", "UNKNOWN"),
+            sla_hours=vendor.get("sla_hours", 24),
+        ),
     }
+
+
+def _clamp_confidence(value: object) -> float:
+    """Return a confidence score in the inclusive 0.0-1.0 range."""
+    if not isinstance(value, (int, float)):
+        return 0.0
+    return max(0.0, min(1.0, float(value)))
+
+
+def _build_recommended_action(
+    needs_human_review: bool,
+    urgency: str,
+    vendor_name: str,
+    sla_hours: int,
+) -> str:
+    """Summarize the operational next step for staff/API consumers."""
+    if urgency == "critical":
+        return (
+            "Treat as an emergency: advise the resident to contact emergency services "
+            "if there is immediate danger, dispatch the assigned vendor immediately, "
+            "and have a property manager review the ticket."
+        )
+    if needs_human_review:
+        return (
+            "Dispatch the assigned vendor if appropriate and route the ticket to a "
+            "property manager for review before closing automation."
+        )
+    return f"Dispatch {vendor_name} within the {sla_hours}-hour SLA and continue automated handling."
