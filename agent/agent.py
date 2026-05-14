@@ -54,10 +54,12 @@ EMERGENCY_PATTERNS = [
     r"\bfire\b",
     r"\bsmoke\b(?!.*detector)",  # smoke but not "smoke detector" alone
     r"\bburning\s*smell\b",
+    r"\bsmell\w*\s+(\w+\s+)*burning\b",  # "smell something burning"
     r"\belectrical\s*fire\b",
     r"\bcarbon\s*monoxide\b",
     r"\bstructural\s*(collapse|damage|failure)\b",
     r"\bceiling\s*(cav|collaps|fall)\w*\b",
+    r"\bcollaps(ing|ed|e)\b",  # standalone "collapsing"
 ]
 
 # ---------------------------------------------------------------------------
@@ -356,11 +358,11 @@ def _get_emergency_category(complaint: str) -> str:
         return "appliance"
     if any(kw in complaint_lower for kw in ["flood", "flooding", "flooded"]):
         return "plumbing"
-    if any(kw in complaint_lower for kw in ["fire", "burning smell", "electrical fire", "smoke"]):
+    if any(kw in complaint_lower for kw in ["fire", "burning smell", "burning", "electrical fire", "smoke"]):
         return "electrical"
     if "carbon monoxide" in complaint_lower:
         return "electrical"
-    if any(kw in complaint_lower for kw in ["collapse", "structural"]):
+    if any(kw in complaint_lower for kw in ["collapse", "collapsing", "structural"]):
         return "general_maintenance"
     return "general_maintenance"
 

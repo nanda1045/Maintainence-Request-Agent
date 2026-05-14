@@ -1,0 +1,59 @@
+{
+  "classification": {
+    "total": 20,
+    "category_accuracy": 1.0,
+    "urgency_accuracy": 0.85,
+    "both_accuracy": 0.85,
+    "failures": [
+      {
+        "test_id": 2,
+        "complaint": "The kitchen faucet has a slow drip. Not urgent but it's anno...",
+        "expected_category": "plumbing",
+        "actual_category": "plumbing",
+        "category_match": true,
+        "expected_urgency": "low",
+        "actual_urgency": "medium",
+        "urgency_match": false,
+        "urgency_close": true,
+        "reasoning": "This is a kitchen faucet drip issue which falls under plumbing, and while not urgent as the resident noted, it wastes water and requires timely repair within 24-48 hours to prevent increased utility costs."
+      },
+      {
+        "test_id": 8,
+        "complaint": "The oven won't heat up at all. Can't cook any meals for my f...",
+        "expected_category": "appliance",
+        "actual_category": "appliance",
+        "category_match": true,
+        "expected_urgency": "medium",
+        "actual_urgency": "high",
+        "urgency_match": false,
+        "urgency_close": true,
+        "reasoning": "A completely non-functional oven prevents the resident from cooking meals for their family, significantly impacting daily habitability and requiring prompt repair within 8-12 hours."
+      },
+      {
+        "test_id": 19,
+        "complaint": "The refrigerator is making a loud buzzing noise but still se...",
+        "expected_category": "appliance",
+        "actual_category": "appliance",
+        "category_match": true,
+        "expected_urgency": "low",
+        "actual_urgency": "medium",
+        "urgency_match": false,
+        "urgency_close": true,
+        "reasoning": "The refrigerator is making unusual noise but still functioning, which could indicate a developing issue that needs attention within 24-48 hours to prevent potential failure, similar to the microwave buzzing case that was resolved with minor adjustments."
+      }
+    ]
+  },
+  "emergency": {
+    "passed": true
+  },
+  "injection": {
+    "passed": true
+  },
+  "ambiguous": {
+    "passed": true
+  },
+  "e2e": {
+    "passed": true,
+    "time_seconds": 38.385478258132935
+  }
+}
