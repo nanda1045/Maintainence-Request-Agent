@@ -3,11 +3,13 @@ api/routes.py
 API endpoints for the Maintenance Triage Agent.
 
 Endpoints:
-  POST /ticket          — Submit a complaint, run the full agent, return triage result
-  GET  /tickets         — List all logged tickets (filterable by urgency, category, status)
-  GET  /tickets/{id}    — Get a single ticket by ID
-  GET  /tickets/stats   — Get aggregate ticket statistics
-  GET  /health          — Health check
+  POST /ticket              — Submit a complaint, run the full agent, return triage result
+  GET  /tickets             — List all logged tickets (filterable by urgency, category, status)
+  GET  /tickets/{id}        — Get a single ticket by ID
+  GET  /tickets/stats       — Get aggregate ticket statistics
+  GET  /responses           — List all drafted responses (filterable by urgency)
+  GET  /responses/{id}      — Get the response for a specific ticket
+  GET  /health              — Health check
 """
 
 import logging
@@ -23,6 +25,8 @@ from api.models import (
     TicketStatsResponse,
     HealthResponse,
     VendorInfo,
+    ResponseItem,
+    ResponseListResponse,
 )
 from agent.agent import process_complaint
 from db_manager.sqlite_manager import (
@@ -196,6 +200,82 @@ async def get_ticket(ticket_id: str):
     if ticket is None:
         raise HTTPException(status_code=404, detail=f"Ticket {ticket_id} not found.")
     return ticket
+
+
+# ---------------------------------------------------------------------------
+# GET /responses — List all drafted responses
+# ---------------------------------------------------------------------------
+@router.get(
+    "/responses",
+    response_model=ResponseListResponse,
+    summary="List all responses",
+    description="Retrieve all drafted responses sent to residents. Optionally filter by urgency.",
+    tags=["Responses"],
+)
+async def list_responses(
+    urgency: Optional[str] = Query(
+        None,
+        description="Filter by urgency level.",
+        enum=["critical", "high", "medium", "low"],
+    ),
+    limit: int = Query(50, ge=1, le=200, description="Maximum number of responses to return."),
+) -> ResponseListResponse:
+    """Retrieve all drafted responses."""
+    tickets = get_all_tickets(urgency=urgency, limit=limit)
+
+    responses = [
+        ResponseItem(
+            ticket_id=t["ticket_id"],
+            unit=t["unit"],
+            resident_name=t["resident_name"],
+            complaint=t["complaint"],
+            category=t["category"],
+            urgency=t["urgency"],
+            resident_message=t.get("resident_message", ""),
+            vendor_name=t.get("vendor_name"),
+            sla_hours=t.get("sla_hours"),
+            status=t["status"],
+            created_at=t["created_at"],
+        )
+        for t in tickets
+        if t.get("resident_message")  # only include tickets that have a drafted response
+    ]
+
+    return ResponseListResponse(responses=responses, total=len(responses))
+
+
+# ---------------------------------------------------------------------------
+# GET /responses/{ticket_id} — Get response for a specific ticket
+# ---------------------------------------------------------------------------
+@router.get(
+    "/responses/{ticket_id}",
+    response_model=ResponseItem,
+    summary="Get response for a ticket",
+    description="Retrieve the drafted response for a specific ticket by its ID.",
+    tags=["Responses"],
+)
+async def get_response(ticket_id: str) -> ResponseItem:
+    """Retrieve the drafted response for a specific ticket."""
+    ticket = get_ticket_by_id(ticket_id)
+    if ticket is None:
+        raise HTTPException(status_code=404, detail=f"Ticket {ticket_id} not found.")
+
+    if not ticket.get("resident_message"):
+        raise HTTPException(status_code=404, detail=f"No response found for ticket {ticket_id}.")
+
+    return ResponseItem(
+        ticket_id=ticket["ticket_id"],
+        unit=ticket["unit"],
+        resident_name=ticket["resident_name"],
+        complaint=ticket["complaint"],
+        category=ticket["category"],
+        urgency=ticket["urgency"],
+        resident_message=ticket["resident_message"],
+        vendor_name=ticket.get("vendor_name"),
+        sla_hours=ticket.get("sla_hours"),
+        status=ticket["status"],
+        created_at=ticket["created_at"],
+    )
 
 
 # ---------------------------------------------------------------------------

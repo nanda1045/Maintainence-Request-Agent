@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Maintenance Request Portal</title>
+  <meta name="description" content="Submit and track apartment maintenance requests.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #FAF8F5;
+      --card: #FFFFFF;
+      --text: #2D2A26;
+      --text-muted: #8A857D;
+      --accent: #D97A3E;
+      --accent-light: #FDF0E6;
+      --border: #EDE9E3;
+      --success: #4A7C59;
+      --success-light: #EDF5EF;
+      --critical: #C0392B;
+      --critical-light: #FDEDED;
+      --high: #D97A3E;
+      --high-light: #FDF0E6;
+      --medium: #2C6FAC;
+      --medium-light: #EBF2FA;
+      --low: #8A857D;
+      --low-light: #F5F3F0;
+      --radius: 12px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
+      --shadow-lg: 0 4px 6px rgba(0,0,0,0.04), 0 12px 28px rgba(0,0,0,0.06);
+    }
+
+    body {
+      font-family: 'DM Sans', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* --- Header --- */
+    .header {
+      padding: 28px 24px 20px;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      background: var(--card);
+    }
+    .header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      color: var(--text);
+    }
+    .header h1 span { color: var(--accent); }
+    .header p {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* --- Main container --- */
+    .container {
+      max-width: 540px;
+      margin: 0 auto;
+      padding: 24px 16px 60px;
+    }
+
+    /* --- Form card --- */
+    .form-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 28px 24px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+    }
+    .form-card h2 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      color: var(--text);
+    }
+
+    /* --- Form fields --- */
+    .field { margin-bottom: 16px; }
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .field-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    input, textarea {
+      width: 100%;
+      padding: 10px 14px;
+      font-family: inherit;
+      font-size: 15px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+      transition: border-color 0.2s, box-shadow 0.2s;
+      outline: none;
+    }
+    input:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-light);
+    }
+    input::placeholder, textarea::placeholder { color: #C4BFBA; }
+    textarea { resize: vertical; min-height: 100px; }
+
+    /* --- Submit button --- */
+    .submit-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 12px;
+      margin-top: 8px;
+      font-family: inherit;
+      font-size: 15px;
+      font-weight: 600;
+      color: white;
+      background: var(--accent);
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .submit-btn:hover { background: #C46C33; }
+    .submit-btn:active { transform: scale(0.98); }
+    .submit-btn:disabled {
+      background: #CBBC9E;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* --- Spinner --- */
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2.5px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* --- Result card --- */
+    .result-card {
+      margin-top: 20px;
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-lg);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      animation: slideUp 0.35s ease-out;
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .result-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .result-header .ticket-id {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* --- Urgency badge --- */
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .badge-critical { background: var(--critical-light); color: var(--critical); }
+    .badge-high { background: var(--high-light); color: var(--high); }
+    .badge-medium { background: var(--medium-light); color: var(--medium); }
+    .badge-low { background: var(--low-light); color: var(--low); }
+
+    /* --- Result body --- */
+    .result-body { padding: 20px; }
+
+    .result-meta {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .meta-item {
+      padding: 10px 14px;
+      background: var(--bg);
+      border-radius: 8px;
+    }
+    .meta-item .meta-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+    .meta-item .meta-value {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 16px 0;
+    }
+
+    .response-section h3 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+    }
+    .response-text {
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text);
+      white-space: pre-line;
+      padding: 16px;
+      background: var(--success-light);
+      border-radius: 8px;
+      border-left: 3px solid var(--success);
+    }
+
+    /* --- Error --- */
+    .error-card {
+      margin-top: 20px;
+      padding: 16px 20px;
+      background: var(--critical-light);
+      border: 1px solid #F5C6CB;
+      border-radius: var(--radius);
+      color: var(--critical);
+      font-size: 14px;
+      animation: slideUp 0.35s ease-out;
+    }
+
+    /* --- Footer --- */
+    .footer {
+      text-align: center;
+      padding: 20px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* --- Responsive --- */
+    @media (max-width: 480px) {
+      .field-row { grid-template-columns: 1fr; }
+      .result-meta { grid-template-columns: 1fr; }
+      .container { padding: 16px 12px 40px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>Maintenance <span>Request</span></h1>
+    <p>Tell us what needs fixing — we'll handle the rest.</p>
+  </div>
+
+  <div class="container">
+    <div class="form-card">
+      <h2>Submit a Request</h2>
+      <form id="ticketForm">
+        <div class="field-row">
+          <div class="field">
+            <label for="residentName">Your Name</label>
+            <input type="text" id="residentName" placeholder="Jane Doe" required>
+          </div>
+          <div class="field">
+            <label for="unit">Unit Number</label>
+            <input type="text" id="unit" placeholder="4A" required>
+          </div>
+        </div>
+        <div class="field">
+          <label for="complaint">What's the issue?</label>
+          <textarea id="complaint" placeholder="Describe the problem in detail..." required></textarea>
+        </div>
+        <button type="submit" class="submit-btn" id="submitBtn">
+          Submit Request
+        </button>
+      </form>
+    </div>
+
+    <div id="resultArea"></div>
+
+    <div class="footer">
+      For life-threatening emergencies, call 911 immediately.
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('ticketForm');
+    const btn = document.getElementById('submitBtn');
+    const resultArea = document.getElementById('resultArea');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      resultArea.innerHTML = '';
+
+      const name = document.getElementById('residentName').value.trim();
+      const unit = document.getElementById('unit').value.trim();
+      const complaint = document.getElementById('complaint').value.trim();
+
+      if (!name || !unit || !complaint) return;
+
+      // Loading state
+      btn.disabled = true;
+      btn.innerHTML = '<div class="spinner"></div> Processing...';
+
+      try {
+        const res = await fetch('/ticket', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            resident_name: name,
+            unit: unit,
+            complaint: complaint,
+          }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'Something went wrong');
+        }
+
+        const data = await res.json();
+        renderResult(data);
+        form.reset();
+
+      } catch (err) {
+        resultArea.innerHTML = `<div class="error-card">⚠ ${err.message}</div>`;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Submit Request';
+      }
+    });
+
+    function renderResult(d) {
+      const urgencyClass = `badge-${d.urgency}`;
+      const emergencyNote = d.emergency_override
+        ? `<div style="padding:10px 14px;background:var(--critical-light);border-radius:8px;color:var(--critical);font-size:13px;font-weight:600;margin-bottom:12px;">
+             🚨 Emergency detected — fast-tracked as critical
+           </div>`
+        : '';
+
+      resultArea.innerHTML = `
+        <div class="result-card">
+          <div class="result-header">
+            <span class="ticket-id">${d.ticket_id}</span>
+            <span class="badge ${urgencyClass}">${d.urgency}</span>
+          </div>
+          <div class="result-body">
+            ${emergencyNote}
+            <div class="result-meta">
+              <div class="meta-item">
+                <div class="meta-label">Category</div>
+                <div class="meta-value">${formatCategory(d.category)}</div>
+              </div>
+              <div class="meta-item">
+                <div class="meta-label">Vendor</div>
+                <div class="meta-value">${d.vendor.name}</div>
+              </div>
+              <div class="meta-item">
+                <div class="meta-label">Contact</div>
+                <div class="meta-value">${d.vendor.phone}</div>
+              </div>
+              <div class="meta-item">
+                <div class="meta-label">ETA</div>
+                <div class="meta-value">Within ${d.vendor.sla_hours}h</div>
+              </div>
+            </div>
+            <div class="divider"></div>
+            <div class="response-section">
+              <h3>Our Response</h3>
+              <div class="response-text">${escapeHtml(d.resident_message)}</div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function formatCategory(cat) {
+      return cat.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>

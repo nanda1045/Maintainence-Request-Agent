@@ -140,3 +140,27 @@ class HealthResponse(BaseModel):
     status: str = "healthy"
     service: str = "maintenance-triage-agent"
     version: str = "1.0.0"
+
+
+class ResponseItem(BaseModel):
+    """A drafted response associated with a ticket."""
+
+    ticket_id: str = Field(..., description="The ticket this response belongs to.")
+    unit: str = Field(..., description="Apartment/unit number.")
+    resident_name: str = Field(..., description="Resident's name.")
+    complaint: str = Field(..., description="Original complaint text.")
+    category: str = Field(..., description="Classified category.")
+    urgency: str = Field(..., description="Classified urgency level.")
+    resident_message: str = Field(..., description="The empathetic response drafted for the resident.")
+    vendor_name: Optional[str] = Field(None, description="Assigned vendor.")
+    sla_hours: Optional[int] = Field(None, description="SLA deadline in hours.")
+    status: str = Field("open", description="Current ticket status.")
+    created_at: str = Field(..., description="When the ticket was created.")
+
+
+class ResponseListResponse(BaseModel):
+    """Response for the GET /responses endpoint."""
+
+    responses: list[ResponseItem]
+    total: int
+

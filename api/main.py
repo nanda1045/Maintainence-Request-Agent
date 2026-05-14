@@ -5,16 +5,21 @@ FastAPI application entry point for the Maintenance Triage Agent.
 Run with:
     uvicorn api.main:app --reload
 
+UI available at:
+    http://localhost:8000/           (Maintenance Request Portal)
 API docs available at:
-    http://localhost:8000/docs     (Swagger UI)
-    http://localhost:8000/redoc    (ReDoc)
+    http://localhost:8000/docs       (Swagger UI)
+    http://localhost:8000/redoc      (ReDoc)
 """
 
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from api.routes import router
 from db_manager.sqlite_manager import init_db
@@ -38,6 +43,7 @@ async def lifespan(app: FastAPI):
     logger.info("🚀 Starting Maintenance Triage Agent API...")
     init_db()
     logger.info("✅ Database initialized")
+    logger.info("📍 UI at: http://localhost:8000/")
     logger.info("📍 API docs at: http://localhost:8000/docs")
     yield
     logger.info("👋 Shutting down Maintenance Triage Agent API")
@@ -71,6 +77,17 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------------------
-# Include routes
+# Include API routes
 # ---------------------------------------------------------------------------
 app.include_router(router)
+
+# ---------------------------------------------------------------------------
+# Serve the UI
+# ---------------------------------------------------------------------------
+STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
+
+
+@app.get("/", include_in_schema=False)
+async def serve_ui():
+    """Serve the maintenance request portal UI."""
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
