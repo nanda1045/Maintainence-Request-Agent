@@ -8,10 +8,12 @@ Tests:
   3. Prompt injection resistance — adversarial inputs
   4. Ambiguous input handling — edge cases
   5. Input sanitization — garbage/empty/extreme inputs
+  6. RAG retrieval quality — precision@k, recall@k, and MRR
 
 Usage:
     python eval/run_eval.py
     python eval/run_eval.py --section classification
+    python eval/run_eval.py --section rag
     python eval/run_eval.py --section emergency
     python eval/run_eval.py --section injection
     python eval/run_eval.py --section ambiguous
@@ -44,6 +46,122 @@ def _header(title: str):
 
 def _subheader(title: str):
     print(f"\n--- {title} ---")
+
+
+# =========================================================================
+# SECTION 0: RAG Retrieval Quality
+# =========================================================================
+def _precision_at_k(retrieved_ids: list[str], expected_ids: set[str], k: int) -> float:
+    """Return precision@k for one query."""
+    if k == 0:
+        return 0.0
+    top_k = retrieved_ids[:k]
+    relevant_found = sum(1 for ticket_id in top_k if ticket_id in expected_ids)
+    return relevant_found / k
+
+
+def _recall_at_k(retrieved_ids: list[str], expected_ids: set[str], k: int) -> float:
+    """Return recall@k for one query."""
+    if not expected_ids:
+        return 0.0
+    top_k = retrieved_ids[:k]
+    relevant_found = sum(1 for ticket_id in top_k if ticket_id in expected_ids)
+    return relevant_found / len(expected_ids)
+
+
+def _reciprocal_rank(retrieved_ids: list[str], expected_ids: set[str]) -> float:
+    """Return reciprocal rank for one query."""
+    for rank, ticket_id in enumerate(retrieved_ids, start=1):
+        if ticket_id in expected_ids:
+            return 1 / rank
+    return 0.0
+
+
+def run_rag_eval(top_k: int = 5):
+    """
+    Evaluate ChromaDB retrieval against a small golden dataset.
+
+    Metrics:
+      - precision@k: how many retrieved tickets are relevant
+      - recall@k: how many expected relevant tickets were retrieved
+      - MRR: how highly the first relevant ticket was ranked
+    """
+    _header(f"SECTION 0: RAG Retrieval Quality (precision@{top_k}, recall@{top_k}, MRR)")
+
+    eval_path = os.path.join(PROJECT_ROOT, "eval", "rag_eval_dataset.json")
+    with open(eval_path, "r") as f:
+        test_cases = json.load(f)
+
+    print(f"  Loaded {len(test_cases)} RAG eval queries\n")
+
+    results = []
+    precision_scores = []
+    recall_scores = []
+    reciprocal_ranks = []
+
+    for case in test_cases:
+        query_id = case["query_id"]
+        query = case["query"]
+        expected_ids = set(case["expected_ticket_ids"])
+
+        rag_result = retrieve_similar_tickets_tool(query, top_k=top_k)
+        retrieved_ids = [
+            ticket["ticket_id"]
+            for ticket in rag_result.get("similar_tickets", [])
+        ]
+
+        precision = _precision_at_k(retrieved_ids, expected_ids, top_k)
+        recall = _recall_at_k(retrieved_ids, expected_ids, top_k)
+        reciprocal_rank = _reciprocal_rank(retrieved_ids, expected_ids)
+
+        precision_scores.append(precision)
+        recall_scores.append(recall)
+        reciprocal_ranks.append(reciprocal_rank)
+
+        first_match_rank = 0
+        for rank, ticket_id in enumerate(retrieved_ids, start=1):
+            if ticket_id in expected_ids:
+                first_match_rank = rank
+                break
+
+        status = "✅" if first_match_rank == 1 else "🟡" if first_match_rank else "❌"
+        print(
+            f"  {status} {query_id}: expected={sorted(expected_ids)} "
+            f"retrieved={retrieved_ids} first_match_rank={first_match_rank or 'N/A'}"
+        )
+
+        results.append({
+            "query_id": query_id,
+            "query": query,
+            "expected_ticket_ids": sorted(expected_ids),
+            "retrieved_ticket_ids": retrieved_ids,
+            "precision_at_k": precision,
+            "recall_at_k": recall,
+            "reciprocal_rank": reciprocal_rank,
+            "first_match_rank": first_match_rank,
+        })
+
+    total = len(test_cases)
+    mean_precision = sum(precision_scores) / total if total else 0.0
+    mean_recall = sum(recall_scores) / total if total else 0.0
+    mrr = sum(reciprocal_ranks) / total if total else 0.0
+    top_1_accuracy = sum(1 for r in results if r["first_match_rank"] == 1) / total if total else 0.0
+
+    _subheader("RAG Retrieval Results")
+    print(f"  Precision@{top_k}:     {mean_precision:.2f}")
+    print(f"  Recall@{top_k}:        {mean_recall:.2f}")
+    print(f"  MRR:              {mrr:.2f}")
+    print(f"  Top-1 accuracy:   {top_1_accuracy:.2f}")
+
+    return {
+        "top_k": top_k,
+        "total": total,
+        "precision_at_k": mean_precision,
+        "recall_at_k": mean_recall,
+        "mrr": mrr,
+        "top_1_accuracy": top_1_accuracy,
+        "results": results,
+    }
 
 
 # =========================================================================
@@ -525,9 +643,15 @@ def main():
     parser = argparse.ArgumentParser(description="Run eval suite for Maintenance Triage Agent")
     parser.add_argument(
         "--section",
-        choices=["classification", "emergency", "injection", "ambiguous", "e2e", "all"],
+        choices=["rag", "classification", "emergency", "injection", "ambiguous", "e2e", "all"],
         default="all",
         help="Which eval section to run (default: all)",
+    )
+    parser.add_argument(
+        "--top-k",
+        type=int,
+        default=5,
+        help="Number of retrieved tickets to evaluate for the RAG section (default: 5)",
     )
     args = parser.parse_args()
 
@@ -538,6 +662,10 @@ def main():
 
     report = {}
     start_total = time.time()
+
+    # Section 0: RAG retrieval quality
+    if args.section in ("rag", "all"):
+        report["rag"] = run_rag_eval(top_k=args.top_k)
 
     # Section 1: Classification accuracy
     if args.section in ("classification", "all"):
@@ -565,6 +693,11 @@ def main():
     print("\n" + "█" * 70)
     print("  FINAL SUMMARY")
     print("█" * 70)
+
+    if "rag" in report:
+        r = report["rag"]
+        print(f"  RAG Retrieval:   precision@{r['top_k']}={r['precision_at_k']:.2f}, "
+              f"recall@{r['top_k']}={r['recall_at_k']:.2f}, MRR={r['mrr']:.2f}")
 
     if "classification" in report:
         r = report["classification"]

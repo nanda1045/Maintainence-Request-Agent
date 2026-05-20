@@ -1,0 +1,62 @@
+[
+  {
+    "query_id": "RAG-001",
+    "query": "Water is dripping from my bathroom ceiling and the ceiling has a brown stain.",
+    "expected_ticket_ids": ["HT-001"],
+    "notes": "Ceiling leak from bathroom area should retrieve the prior ceiling leak ticket."
+  },
+  {
+    "query_id": "RAG-002",
+    "query": "My kitchen faucet keeps dripping and will not shut off all the way.",
+    "expected_ticket_ids": ["HT-002"],
+    "notes": "Kitchen faucet drip should retrieve the faucet cartridge leak ticket."
+  },
+  {
+    "query_id": "RAG-003",
+    "query": "The AC is blowing warm air and the apartment is very hot.",
+    "expected_ticket_ids": ["HT-003"],
+    "notes": "Warm-air AC issue should retrieve the refrigerant leak HVAC ticket."
+  },
+  {
+    "query_id": "RAG-004",
+    "query": "I smell burning near my electrical panel and see dark scorch marks.",
+    "expected_ticket_ids": ["HT-006"],
+    "notes": "Burning smell near electrical panel should retrieve the critical electrical ticket."
+  },
+  {
+    "query_id": "RAG-005",
+    "query": "There are cockroaches in my kitchen near the refrigerator and sink.",
+    "expected_ticket_ids": ["HT-007"],
+    "notes": "Cockroach complaint should retrieve the kitchen pest-control ticket."
+  },
+  {
+    "query_id": "RAG-006",
+    "query": "My apartment door lock is broken and I cannot secure the front door.",
+    "expected_ticket_ids": ["HT-008"],
+    "notes": "Broken lock/security issue should retrieve the front door lock ticket."
+  },
+  {
+    "query_id": "RAG-007",
+    "query": "The refrigerator stopped cooling and my food is starting to spoil.",
+    "expected_ticket_ids": ["HT-012"],
+    "notes": "Refrigerator cooling issue should retrieve the compressor relay appliance ticket."
+  },
+  {
+    "query_id": "RAG-008",
+    "query": "Gas smell is coming from the stove area even after I turned it off.",
+    "expected_ticket_ids": ["HT-016"],
+    "notes": "Stove gas smell should retrieve the prior gas leak appliance ticket."
+  },
+  {
+    "query_id": "RAG-009",
+    "query": "I found bedbugs and I wake up with small bites on my arms.",
+    "expected_ticket_ids": ["HT-018"],
+    "notes": "Bedbug report should retrieve the heat-treatment pest ticket."
+  },
+  {
+    "query_id": "RAG-010",
+    "query": "Water is flooding from under my bathroom sink and pooling on the floor.",
+    "expected_ticket_ids": ["HT-020"],
+    "notes": "Bathroom sink flooding should retrieve the burst supply line plumbing ticket."
+  }
+]
