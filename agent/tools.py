@@ -11,12 +11,12 @@ Tool 5: log_ticket                → Writes full ticket to SQLite
 
 import json
 import os
-from typing import Optional
 
 import anthropic
 from dotenv import load_dotenv
 
 from agent.prompts import CLASSIFY_PROMPT, DRAFT_RESPONSE_PROMPT
+from agent.tool_definitions import CATEGORIES, URGENCY_LEVELS
 from rag.retriever import search_similar_tickets
 from db_manager.sqlite_manager import generate_ticket_id, insert_ticket
 
@@ -28,6 +28,8 @@ load_dotenv()
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VENDORS_PATH = os.path.join(PROJECT_ROOT, "data", "vendors.json")
 MODEL = "claude-sonnet-4-20250514"
+RECURRING_ISSUE_SIMILARITY_THRESHOLD = 0.75
+RECURRING_ISSUE_MIN_MATCHES = 2
 
 _client = None
 
@@ -56,6 +58,7 @@ def _format_similar_tickets_context(tickets: list[dict]) -> str:
     for i, t in enumerate(tickets, 1):
         lines.append(
             f"{i}. [{t['ticket_id']}] (similarity: {t['similarity_score']:.2f})\n"
+            f"   Unit: {t.get('unit', 'N/A')}\n"
             f"   Complaint: {t['complaint']}\n"
             f"   Category: {t['category']} | Urgency: {t['urgency']}\n"
             f"   Resolution: {t['resolution']}"
@@ -63,10 +66,83 @@ def _format_similar_tickets_context(tickets: list[dict]) -> str:
     return "\n\n".join(lines)
 
 
+def _append_reason(existing_reason: str, new_reason: str) -> str:
+    """Append an escalation reason without losing the model's original reason."""
+    if not existing_reason:
+        return new_reason
+    if new_reason in existing_reason:
+        return existing_reason
+    return f"{existing_reason}; {new_reason}"
+
+
+def _get_recurring_issue_matches(
+    similar_tickets: list[dict],
+    unit: str,
+    category: str,
+) -> list[dict]:
+    """
+    Return similar historical tickets for the same unit and category.
+
+    This keeps the recurrence rule targeted: an AC issue across many apartments
+    should not automatically raise one resident's ticket, but repeated AC issues
+    in the same unit can indicate an unresolved root cause.
+    """
+    if not unit or not category:
+        return []
+
+    return [
+        ticket
+        for ticket in similar_tickets
+        if ticket.get("unit") == unit
+        and ticket.get("category") == category
+        and ticket.get("similarity_score", 0) >= RECURRING_ISSUE_SIMILARITY_THRESHOLD
+    ]
+
+
+def _apply_recurring_issue_escalation(
+    result: dict,
+    similar_tickets: list[dict],
+    unit: str,
+) -> dict:
+    """
+    Upgrade low/medium requests to high when the same issue repeats in the same unit.
+
+    The LLM still classifies the initial category/urgency, but this deterministic
+    guardrail catches repeated unresolved patterns from historical tickets.
+    """
+    if result.get("urgency") not in {"low", "medium"}:
+        return result
+
+    matches = _get_recurring_issue_matches(
+        similar_tickets=similar_tickets,
+        unit=unit,
+        category=result.get("category", ""),
+    )
+
+    if len(matches) < RECURRING_ISSUE_MIN_MATCHES:
+        return result
+
+    matched_ids = ", ".join(ticket["ticket_id"] for ticket in matches)
+    reason = (
+        f"Recurring issue pattern detected for unit {unit} from similar "
+        f"historical tickets ({matched_ids}); upgraded urgency to high."
+    )
+
+    result["urgency"] = "high"
+    result["requires_human_review"] = True
+    result["escalation_reason"] = _append_reason(
+        result.get("escalation_reason", ""),
+        reason,
+    )
+    result["reasoning"] = _append_reason(result.get("reasoning", ""), reason)
+
+    return result
+
+
 # =========================================================================
 # Tool 1: retrieve_similar_tickets
 # =========================================================================
-def retrieve_similar_tickets_tool(complaint: str, top_k: int = 3) -> dict:
+def retrieve_similar_tickets_tool(complaint: str, top_k: int = 5) -> dict:
     """
     RAG search over ChromaDB to find similar past maintenance tickets.
 
@@ -143,15 +219,9 @@ def classify_request_tool(
     result = json.loads(response_text)
 
     # Validate the values
-    valid_categories = {
-        "plumbing", "hvac", "electrical",
-        "pest_control", "appliance", "general_maintenance",
-    }
-    valid_urgencies = {"critical", "high", "medium", "low"}
-
-    if result.get("category") not in valid_categories:
+    if result.get("category") not in CATEGORIES:
         result["category"] = "general_maintenance"
-    if result.get("urgency") not in valid_urgencies:
+    if result.get("urgency") not in URGENCY_LEVELS:
         result["urgency"] = "medium"
 
     # Validate and clamp confidence score
@@ -169,6 +239,8 @@ def classify_request_tool(
     # Ensure boolean type
     result["requires_human_review"] = bool(result.get("requires_human_review", False))
     result["escalation_reason"] = result.get("escalation_reason", "")
+
+    result = _apply_recurring_issue_escalation(result, similar_tickets, unit)
 
     return result
 

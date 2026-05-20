@@ -108,6 +108,7 @@ def search_similar_tickets(query: str, top_k: int = 3) -> list[dict]:
         A list of dictionaries, each containing:
           - ticket_id
           - complaint (original complaint text)
+          - unit
           - category, urgency, vendor, resolution, sla_hours
           - similarity_score (cosine similarity, 0-1 where 1 = identical)
     """
@@ -140,6 +141,7 @@ def search_similar_tickets(query: str, top_k: int = 3) -> list[dict]:
             {
                 "ticket_id": results["ids"][0][i],
                 "complaint": results["documents"][0][i],
+                "unit": metadata.get("unit", ""),
                 "category": metadata.get("category", ""),
                 "urgency": metadata.get("urgency", ""),
                 "vendor": metadata.get("vendor", ""),

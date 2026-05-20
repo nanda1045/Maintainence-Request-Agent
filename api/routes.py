@@ -40,6 +40,73 @@ logger = logging.getLogger("maintenance_agent")
 router = APIRouter()
 
 
+def _ticket_response_from_agent_result(result: dict) -> TicketResponse:
+    """Map the agent's internal result dictionary to the public API schema."""
+    return TicketResponse(
+        ticket_id=result["ticket_id"],
+        unit=result["unit"],
+        resident_name=result["resident_name"],
+        complaint=result["complaint"],
+        category=result["category"],
+        urgency=result["urgency"],
+        confidence_score=result.get("confidence_score", 0.0),
+        reasoning=result.get("reasoning", ""),
+        vendor=VendorInfo(
+            name=result["vendor"]["name"],
+            phone=result["vendor"]["phone"],
+            email=result["vendor"]["email"],
+            sla_hours=result["vendor"]["sla_hours"],
+        ),
+        similar_tickets=result.get("similar_tickets", []),
+        resident_message=result.get("resident_message", ""),
+        emergency_override=result.get("emergency_override", False),
+        status=result.get("status", "open"),
+        needs_human_review=result.get("needs_human_review", False),
+        escalation_reason=result.get("escalation_reason", ""),
+        recommended_action=result.get("recommended_action", ""),
+    )
+
+
+def _ticket_list_item_from_row(ticket: dict) -> TicketListItem:
+    """Map a stored ticket row to the list-view API schema."""
+    return TicketListItem(
+        ticket_id=ticket["ticket_id"],
+        unit=ticket["unit"],
+        resident_name=ticket["resident_name"],
+        complaint=ticket["complaint"],
+        category=ticket["category"],
+        urgency=ticket["urgency"],
+        confidence_score=ticket.get("confidence_score", 0.0),
+        needs_human_review=ticket.get("requires_human_review", False),
+        escalation_reason=ticket.get("escalation_reason", ""),
+        vendor_name=ticket.get("vendor_name"),
+        sla_hours=ticket.get("sla_hours"),
+        status=ticket["status"],
+        created_at=ticket["created_at"],
+        updated_at=ticket["updated_at"],
+    )
+
+
+def _response_item_from_row(ticket: dict) -> ResponseItem:
+    """Map a stored ticket row to the drafted-response API schema."""
+    return ResponseItem(
+        ticket_id=ticket["ticket_id"],
+        unit=ticket["unit"],
+        resident_name=ticket["resident_name"],
+        complaint=ticket["complaint"],
+        category=ticket["category"],
+        urgency=ticket["urgency"],
+        confidence_score=ticket.get("confidence_score", 0.0),
+        needs_human_review=ticket.get("requires_human_review", False),
+        escalation_reason=ticket.get("escalation_reason", ""),
+        resident_message=ticket["resident_message"],
+        vendor_name=ticket.get("vendor_name"),
+        sla_hours=ticket.get("sla_hours"),
+        status=ticket["status"],
+        created_at=ticket["created_at"],
+    )
+
+
 # ---------------------------------------------------------------------------
 # POST /ticket — Submit a new maintenance complaint
 # ---------------------------------------------------------------------------
@@ -73,30 +140,7 @@ async def create_ticket(request: TicketRequest) -> TicketResponse:
         resident_name=request.resident_name,
     )
 
-    # Map agent result to Pydantic response model
-    return TicketResponse(
-        ticket_id=result["ticket_id"],
-        unit=result["unit"],
-        resident_name=result["resident_name"],
-        complaint=result["complaint"],
-        category=result["category"],
-        urgency=result["urgency"],
-        confidence_score=result.get("confidence_score", 0.0),
-        reasoning=result.get("reasoning", ""),
-        vendor=VendorInfo(
-            name=result["vendor"]["name"],
-            phone=result["vendor"]["phone"],
-            email=result["vendor"]["email"],
-            sla_hours=result["vendor"]["sla_hours"],
-        ),
-        similar_tickets=result.get("similar_tickets", []),
-        resident_message=result.get("resident_message", ""),
-        emergency_override=result.get("emergency_override", False),
-        status=result.get("status", "open"),
-        needs_human_review=result.get("needs_human_review", False),
-        escalation_reason=result.get("escalation_reason", ""),
-        recommended_action=result.get("recommended_action", ""),
-    )
+    return _ticket_response_from_agent_result(result)
 
 
 # ---------------------------------------------------------------------------
@@ -139,25 +183,7 @@ async def list_tickets(
         limit=limit,
     )
 
-    ticket_items = [
-        TicketListItem(
-            ticket_id=t["ticket_id"],
-            unit=t["unit"],
-            resident_name=t["resident_name"],
-            complaint=t["complaint"],
-            category=t["category"],
-            urgency=t["urgency"],
-            confidence_score=t.get("confidence_score", 0.0),
-            needs_human_review=t.get("requires_human_review", False),
-            escalation_reason=t.get("escalation_reason", ""),
-            vendor_name=t.get("vendor_name"),
-            sla_hours=t.get("sla_hours"),
-            status=t["status"],
-            created_at=t["created_at"],
-            updated_at=t["updated_at"],
-        )
-        for t in tickets
-    ]
+    ticket_items = [_ticket_list_item_from_row(t) for t in tickets]
 
     # Build filters applied dict
     filters = {}
@@ -230,22 +256,7 @@ async def list_responses(
     tickets = get_all_tickets(urgency=urgency, limit=limit)
 
     responses = [
-        ResponseItem(
-            ticket_id=t["ticket_id"],
-            unit=t["unit"],
-            resident_name=t["resident_name"],
-            complaint=t["complaint"],
-            category=t["category"],
-            urgency=t["urgency"],
-            confidence_score=t.get("confidence_score", 0.0),
-            needs_human_review=t.get("requires_human_review", False),
-            escalation_reason=t.get("escalation_reason", ""),
-            resident_message=t.get("resident_message", ""),
-            vendor_name=t.get("vendor_name"),
-            sla_hours=t.get("sla_hours"),
-            status=t["status"],
-            created_at=t["created_at"],
-        )
+        _response_item_from_row(t)
         for t in tickets
         if t.get("resident_message")  # only include tickets that have a drafted response
     ]
@@ -272,22 +283,7 @@ async def get_response(ticket_id: str) -> ResponseItem:
     if not ticket.get("resident_message"):
         raise HTTPException(status_code=404, detail=f"No response found for ticket {ticket_id}.")
 
-    return ResponseItem(
-        ticket_id=ticket["ticket_id"],
-        unit=ticket["unit"],
-        resident_name=ticket["resident_name"],
-        complaint=ticket["complaint"],
-        category=ticket["category"],
-        urgency=ticket["urgency"],
-        confidence_score=ticket.get("confidence_score", 0.0),
-        needs_human_review=ticket.get("requires_human_review", False),
-        escalation_reason=ticket.get("escalation_reason", ""),
-        resident_message=ticket["resident_message"],
-        vendor_name=ticket.get("vendor_name"),
-        sla_hours=ticket.get("sla_hours"),
-        status=ticket["status"],
-        created_at=ticket["created_at"],
-    )
+    return _response_item_from_row(ticket)
 
 
 # ---------------------------------------------------------------------------
