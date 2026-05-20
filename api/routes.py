@@ -6,6 +6,7 @@ Endpoints:
   POST /ticket              — Submit a complaint, run the full agent, return triage result
   GET  /tickets             — List all logged tickets (filterable by urgency, category, status)
   GET  /tickets/{id}        — Get a single ticket by ID
+  PATCH /tickets/{id}/resolution — Update ticket resolution lifecycle fields
   GET  /tickets/stats       — Get aggregate ticket statistics
   GET  /responses           — List all drafted responses (filterable by urgency)
   GET  /responses/{id}      — Get the response for a specific ticket
@@ -19,6 +20,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from api.models import (
     TicketRequest,
+    TicketResolutionUpdate,
     TicketResponse,
     TicketListItem,
     TicketListResponse,
@@ -33,6 +35,7 @@ from db_manager.sqlite_manager import (
     get_all_tickets,
     get_ticket_by_id,
     get_ticket_stats,
+    update_ticket_resolution,
 )
 
 logger = logging.getLogger("maintenance_agent")
@@ -61,6 +64,11 @@ def _ticket_response_from_agent_result(result: dict) -> TicketResponse:
         resident_message=result.get("resident_message", ""),
         emergency_override=result.get("emergency_override", False),
         status=result.get("status", "open"),
+        resolution_notes=result.get("resolution_notes", ""),
+        resolved_at=result.get("resolved_at"),
+        closed_at=result.get("closed_at"),
+        resident_confirmed=result.get("resident_confirmed", False),
+        ready_for_rag_ingestion=result.get("ready_for_rag_ingestion", False),
         needs_human_review=result.get("needs_human_review", False),
         escalation_reason=result.get("escalation_reason", ""),
         recommended_action=result.get("recommended_action", ""),
@@ -82,6 +90,11 @@ def _ticket_list_item_from_row(ticket: dict) -> TicketListItem:
         vendor_name=ticket.get("vendor_name"),
         sla_hours=ticket.get("sla_hours"),
         status=ticket["status"],
+        resolution_notes=ticket.get("resolution_notes", ""),
+        resolved_at=ticket.get("resolved_at"),
+        closed_at=ticket.get("closed_at"),
+        resident_confirmed=ticket.get("resident_confirmed", False),
+        ready_for_rag_ingestion=ticket.get("ready_for_rag_ingestion", False),
         created_at=ticket["created_at"],
         updated_at=ticket["updated_at"],
     )
@@ -170,7 +183,7 @@ async def list_tickets(
     status: Optional[str] = Query(
         None,
         description="Filter by ticket status.",
-        enum=["open", "in_progress", "resolved", "closed"],
+        enum=["open", "assigned", "vendor_accepted", "in_progress", "resolved", "closed"],
     ),
     limit: int = Query(50, ge=1, le=200, description="Maximum number of tickets to return."),
 ) -> TicketListResponse:
@@ -231,6 +244,37 @@ async def get_ticket(ticket_id: str):
     ticket = get_ticket_by_id(ticket_id)
     if ticket is None:
         raise HTTPException(status_code=404, detail=f"Ticket {ticket_id} not found.")
+    return ticket
+
+
+# ---------------------------------------------------------------------------
+# PATCH /tickets/{ticket_id}/resolution — Update resolution lifecycle
+# ---------------------------------------------------------------------------
+@router.patch(
+    "/tickets/{ticket_id}/resolution",
+    summary="Update ticket resolution lifecycle",
+    description=(
+        "Update ticket status, resolution notes, resident confirmation, and whether "
+        "the ticket is ready to be ingested into the RAG history."
+    ),
+    tags=["Tickets"],
+)
+async def update_resolution(ticket_id: str, request: TicketResolutionUpdate):
+    """Update resolution lifecycle fields for a ticket."""
+    try:
+        ticket = update_ticket_resolution(
+            ticket_id=ticket_id,
+            status=request.status.value if request.status else None,
+            resolution_notes=request.resolution_notes,
+            resident_confirmed=request.resident_confirmed,
+            ready_for_rag_ingestion=request.ready_for_rag_ingestion,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if ticket is None:
+        raise HTTPException(status_code=404, detail=f"Ticket {ticket_id} not found.")
+
     return ticket
 
 

@@ -30,6 +30,15 @@ class Category(str, Enum):
     general_maintenance = "general_maintenance"
 
 
+class TicketStatus(str, Enum):
+    open = "open"
+    assigned = "assigned"
+    vendor_accepted = "vendor_accepted"
+    in_progress = "in_progress"
+    resolved = "resolved"
+    closed = "closed"
+
+
 # ---------------------------------------------------------------------------
 # Request models
 # ---------------------------------------------------------------------------
@@ -56,6 +65,29 @@ class TicketRequest(BaseModel):
         max_length=2000,
         description="Full description of the maintenance issue.",
         examples=["The dishwasher is leaking water all over the kitchen floor every time I run it."],
+    )
+
+
+class TicketResolutionUpdate(BaseModel):
+    """Manager/vendor update for the ticket resolution lifecycle."""
+
+    status: Optional[TicketStatus] = Field(
+        None,
+        description="New lifecycle status for the ticket.",
+    )
+    resolution_notes: Optional[str] = Field(
+        None,
+        min_length=1,
+        max_length=2000,
+        description="How the issue was resolved or the latest work notes.",
+    )
+    resident_confirmed: Optional[bool] = Field(
+        None,
+        description="Whether the resident confirmed the issue is resolved.",
+    )
+    ready_for_rag_ingestion: Optional[bool] = Field(
+        None,
+        description="Whether this closed/resolved ticket is eligible for future RAG ingestion.",
     )
 
 
@@ -98,6 +130,14 @@ class TicketResponse(BaseModel):
         description="Whether emergency keyword bypass was triggered.",
     )
     status: str = Field("open", description="Current ticket status.")
+    resolution_notes: str = Field("", description="How the issue was resolved, once available.")
+    resolved_at: Optional[str] = Field(None, description="When the issue was marked resolved.")
+    closed_at: Optional[str] = Field(None, description="When the ticket was closed.")
+    resident_confirmed: bool = Field(False, description="Whether the resident confirmed resolution.")
+    ready_for_rag_ingestion: bool = Field(
+        False,
+        description="Whether this ticket can be embedded into the historical RAG store.",
+    )
     needs_human_review: bool = Field(
         False,
         description="Whether the ticket was flagged for manual review.",
@@ -127,6 +167,11 @@ class TicketListItem(BaseModel):
     vendor_name: Optional[str] = None
     sla_hours: Optional[int] = None
     status: str
+    resolution_notes: str = ""
+    resolved_at: Optional[str] = None
+    closed_at: Optional[str] = None
+    resident_confirmed: bool = False
+    ready_for_rag_ingestion: bool = False
     created_at: str
     updated_at: str
 

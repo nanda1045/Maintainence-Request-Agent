@@ -17,6 +17,15 @@ from typing import Optional
 DB_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "db")
 DB_PATH = os.path.join(DB_DIR, "tickets.db")
 
+VALID_TICKET_STATUSES = {
+    "open",
+    "assigned",
+    "vendor_accepted",
+    "in_progress",
+    "resolved",
+    "closed",
+}
+
 
 def get_connection(db_path: str = DB_PATH) -> sqlite3.Connection:
     """Get a SQLite connection with row factory enabled."""
@@ -48,7 +57,12 @@ def init_db(db_path: str = DB_PATH) -> None:
       - confidence_score  : AI confidence in classification (0.0 - 1.0)
       - requires_human_review : whether the ticket was escalated for human review
       - escalation_reason : reason for escalation (if applicable)
-      - status            : ticket status (open, in_progress, resolved, closed)
+      - status            : ticket lifecycle status
+      - resolution_notes  : notes explaining how the issue was resolved
+      - resolved_at       : timestamp when work was marked resolved
+      - closed_at         : timestamp when the ticket was closed
+      - resident_confirmed: whether the resident confirmed resolution
+      - ready_for_rag_ingestion : whether this closed ticket can be embedded
       - created_at        : timestamp when ticket was created
       - updated_at        : timestamp when ticket was last updated
     """
@@ -73,6 +87,11 @@ def init_db(db_path: str = DB_PATH) -> None:
                 requires_human_review INTEGER DEFAULT 0,
                 escalation_reason TEXT DEFAULT '',
                 status          TEXT DEFAULT 'open',
+                resolution_notes TEXT DEFAULT '',
+                resolved_at      TEXT,
+                closed_at        TEXT,
+                resident_confirmed INTEGER DEFAULT 0,
+                ready_for_rag_ingestion INTEGER DEFAULT 0,
                 created_at      TEXT NOT NULL,
                 updated_at      TEXT NOT NULL
             )
@@ -81,6 +100,11 @@ def init_db(db_path: str = DB_PATH) -> None:
         _ensure_column(conn, "tickets", "confidence_score", "REAL DEFAULT 0.0")
         _ensure_column(conn, "tickets", "requires_human_review", "INTEGER DEFAULT 0")
         _ensure_column(conn, "tickets", "escalation_reason", "TEXT DEFAULT ''")
+        _ensure_column(conn, "tickets", "resolution_notes", "TEXT DEFAULT ''")
+        _ensure_column(conn, "tickets", "resolved_at", "TEXT")
+        _ensure_column(conn, "tickets", "closed_at", "TEXT")
+        _ensure_column(conn, "tickets", "resident_confirmed", "INTEGER DEFAULT 0")
+        _ensure_column(conn, "tickets", "ready_for_rag_ingestion", "INTEGER DEFAULT 0")
 
         # Index on category + urgency for quick lookups
         conn.execute("""
@@ -92,6 +116,11 @@ def init_db(db_path: str = DB_PATH) -> None:
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_tickets_status
             ON tickets (status)
+        """)
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_tickets_rag_ready
+            ON tickets (ready_for_rag_ingestion)
         """)
 
         conn.commit()
@@ -242,14 +271,90 @@ def update_ticket_status(
     ticket_id: str, status: str, db_path: str = DB_PATH
 ) -> Optional[dict]:
     """Update the status of a ticket."""
+    if status not in VALID_TICKET_STATUSES:
+        raise ValueError(f"Invalid ticket status: {status}")
+
     now = datetime.now().isoformat()
     conn = get_connection(db_path)
     try:
+        updates = ["status = ?", "updated_at = ?"]
+        params = [status, now]
+
+        if status == "resolved":
+            updates.append("resolved_at = COALESCE(resolved_at, ?)")
+            params.append(now)
+        elif status == "closed":
+            updates.append("closed_at = COALESCE(closed_at, ?)")
+            updates.append("ready_for_rag_ingestion = 1")
+            params.append(now)
+
+        params.append(ticket_id)
         conn.execute(
-            "UPDATE tickets SET status = ?, updated_at = ? WHERE ticket_id = ?",
-            (status, now, ticket_id),
+            f"UPDATE tickets SET {', '.join(updates)} WHERE ticket_id = ?",
+            params,
         )
         conn.commit()
+        return get_ticket_by_id(ticket_id, db_path)
+    finally:
+        conn.close()
+
+
+def update_ticket_resolution(
+    ticket_id: str,
+    status: Optional[str] = None,
+    resolution_notes: Optional[str] = None,
+    resident_confirmed: Optional[bool] = None,
+    ready_for_rag_ingestion: Optional[bool] = None,
+    db_path: str = DB_PATH,
+) -> Optional[dict]:
+    """
+    Update resolution lifecycle fields for a ticket.
+
+    This is intended for a property manager or vendor callback after the issue
+    progresses beyond initial AI triage.
+    """
+    if status is not None and status not in VALID_TICKET_STATUSES:
+        raise ValueError(f"Invalid ticket status: {status}")
+
+    now = datetime.now().isoformat()
+    updates = ["updated_at = ?"]
+    params: list = [now]
+
+    if status is not None:
+        updates.append("status = ?")
+        params.append(status)
+        if status == "resolved":
+            updates.append("resolved_at = COALESCE(resolved_at, ?)")
+            params.append(now)
+        elif status == "closed":
+            updates.append("closed_at = COALESCE(closed_at, ?)")
+            params.append(now)
+
+    if resolution_notes is not None:
+        updates.append("resolution_notes = ?")
+        params.append(resolution_notes)
+
+    if resident_confirmed is not None:
+        updates.append("resident_confirmed = ?")
+        params.append(1 if resident_confirmed else 0)
+
+    if ready_for_rag_ingestion is not None:
+        updates.append("ready_for_rag_ingestion = ?")
+        params.append(1 if ready_for_rag_ingestion else 0)
+    elif status == "closed":
+        updates.append("ready_for_rag_ingestion = 1")
+
+    params.append(ticket_id)
+
+    conn = get_connection(db_path)
+    try:
+        cursor = conn.execute(
+            f"UPDATE tickets SET {', '.join(updates)} WHERE ticket_id = ?",
+            params,
+        )
+        conn.commit()
+        if cursor.rowcount == 0:
+            return None
         return get_ticket_by_id(ticket_id, db_path)
     finally:
         conn.close()
@@ -300,6 +405,10 @@ def _row_to_dict(row: sqlite3.Row) -> dict:
     # Convert requires_human_review from int to bool
     if "requires_human_review" in d:
         d["requires_human_review"] = bool(d["requires_human_review"])
+    if "resident_confirmed" in d:
+        d["resident_confirmed"] = bool(d["resident_confirmed"])
+    if "ready_for_rag_ingestion" in d:
+        d["ready_for_rag_ingestion"] = bool(d["ready_for_rag_ingestion"])
     return d
 
 
